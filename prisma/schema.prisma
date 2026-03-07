@@ -1,0 +1,190 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum EstadoSubscripcion {
+  ACTIVA
+  PAUSADA
+  CANCELADA
+}
+
+enum RolUsuario {
+  ADMIN
+  EDITOR
+  LECTOR
+}
+
+enum EstadoEnvioNewsletter {
+  PENDING
+  PROCESSING
+  PARTIAL
+  SENT
+  FAILED
+}
+
+enum EstadoEntregaNewsletter {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Usuario {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  email          String         @unique
+  nombre         String?
+  rol            RolUsuario     @default(LECTOR)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  noticias       Noticia[]
+  subscripciones Subscripcion[]
+
+  @@map("usuarios")
+}
+
+model Newsletter {
+  id                String               @id @default(auto()) @map("_id") @db.ObjectId
+  nombre            String
+  slug              String               @unique
+  descripcion       String?
+  activa            Boolean              @default(true)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  subscripciones    Subscripcion[]
+  noticias          Noticia[]
+  newsletterEnvios  NewsletterEnvio[]
+
+  @@map("newsletters")
+}
+
+model Subscripcion {
+  id                   String                @id @default(auto()) @map("_id") @db.ObjectId
+  email                String
+  estado               EstadoSubscripcion    @default(ACTIVA)
+  usuarioId            String?               @db.ObjectId
+  newsletterId         String                @db.ObjectId
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  usuario              Usuario?              @relation(fields: [usuarioId], references: [id])
+  newsletter           Newsletter            @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
+  newsletterEntregas   NewsletterEntrega[]
+
+  @@unique([email, newsletterId])
+  @@index([usuarioId])
+  @@index([newsletterId])
+  @@map("subscripciones")
+}
+
+model Noticia {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  titulo       String
+  slug         String       @unique
+  resumen      String?
+  contenido    String
+  publicada    Boolean      @default(false)
+  emailSentAt  DateTime?
+  esExterna    Boolean      @default(false)
+  sourceUrl    String?
+  sourceName   String?
+  provider     String?
+  externalId   String?
+  imageUrl     String?
+  idioma       String?
+  pais         String?
+  rawPayload   Json?
+  ingestedAt   DateTime?
+  publishedAt  DateTime?
+  autorId      String?      @db.ObjectId
+  newsletterId String       @db.ObjectId
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  autor        Usuario?     @relation(fields: [autorId], references: [id])
+  newsletter   Newsletter   @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
+
+  @@index([autorId])
+  @@index([newsletterId])
+  @@index([provider])
+  @@index([sourceUrl])
+  @@index([publishedAt])
+  @@map("noticias")
+}
+
+model NewsletterEnvio {
+  id             String                  @id @default(auto()) @map("_id") @db.ObjectId
+  newsletterId   String                  @db.ObjectId
+  asunto         String
+  contenidoHtml  String
+  contenidoTexto String
+  noticiaIds     String[]                @db.ObjectId
+  estado         EstadoEnvioNewsletter   @default(PENDING)
+  recipientCount Int                     @default(0)
+  successCount   Int                     @default(0)
+  failureCount   Int                     @default(0)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  lastError      String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  newsletter     Newsletter              @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
+  entregas       NewsletterEntrega[]
+
+  @@index([newsletterId])
+  @@index([estado])
+  @@index([createdAt])
+  @@map("newsletter_envios")
+}
+
+model NewsletterEntrega {
+  id                String                    @id @default(auto()) @map("_id") @db.ObjectId
+  envioId           String                    @db.ObjectId
+  subscripcionId    String                    @db.ObjectId
+  email             String
+  estado            EstadoEntregaNewsletter   @default(PENDING)
+  provider          String?
+  providerMessageId String?
+  providerStatus    String?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  envio             NewsletterEnvio           @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  subscripcion      Subscripcion              @relation(fields: [subscripcionId], references: [id], onDelete: Cascade)
+
+  @@unique([envioId, subscripcionId])
+  @@index([envioId])
+  @@index([subscripcionId])
+  @@index([estado])
+  @@map("newsletter_entregas")
+}
+
+model IngestionRun {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  provider       String
+  query          String?
+  status         String
+  requestedCount Int
+  fetchedCount   Int       @default(0)
+  insertedCount  Int       @default(0)
+  updatedCount   Int       @default(0)
+  duplicateCount Int       @default(0)
+  errorMessage   String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([provider])
+  @@index([status])
+  @@index([startedAt])
+  @@map("ingestion_runs")
+}
