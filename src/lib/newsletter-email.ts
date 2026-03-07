@@ -5,6 +5,11 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import {
+  buildNewsletterEmail,
+  buildNewsletterTemplateContent,
+  createZavuEmailPayload,
+} from "@/lib/newsletter-template";
 
 const DEFAULT_SEND_BATCH_SIZE = 50;
 const DEFAULT_NEWS_ITEMS_PER_EMAIL = 5;
@@ -37,134 +42,6 @@ function getEnvNumber(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function getBaseUrl() {
-  return process.env.APP_URL?.trim().replaceAll(/\/+$/g, "") ?? "";
-}
-
-function formatDate(date: Date | null) {
-  if (!date) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat("es-MX", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function buildArticleUrl(sourceUrl: string | null, slug: string) {
-  if (sourceUrl) {
-    return sourceUrl;
-  }
-
-  const baseUrl = getBaseUrl();
-  return baseUrl ? `${baseUrl}/?news=${slug}` : null;
-}
-
-function buildEmailSubject(newsletterName: string, newsCount: number) {
-  return newsCount === 1
-    ? `${newsletterName}: nueva noticia disponible`
-    : `${newsletterName}: ${newsCount} noticias nuevas`;
-}
-
-function buildEmailContent({
-  newsletterName,
-  newsletterDescription,
-  articles,
-}: {
-  newsletterName: string;
-  newsletterDescription: string | null;
-  articles: Array<{
-    id: string;
-    titulo: string;
-    resumen: string | null;
-    contenido: string;
-    slug: string;
-    sourceUrl: string | null;
-    sourceName: string | null;
-    publishedAt: Date | null;
-  }>;
-}) {
-  const intro = newsletterDescription?.trim() || `Resumen reciente de ${newsletterName}.`;
-  const htmlItems = articles
-    .map((article) => {
-      const articleUrl = buildArticleUrl(article.sourceUrl, article.slug);
-      const summary = escapeHtml(article.resumen?.trim() || article.contenido.trim());
-      const source = article.sourceName ? `Fuente: ${escapeHtml(article.sourceName)}` : "";
-      const publishedAt = formatDate(article.publishedAt);
-
-      return `
-        <article style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid #e2e8f0;">
-          <h2 style="margin:0 0 8px;font-size:20px;line-height:1.3;color:#0f172a;">${escapeHtml(article.titulo)}</h2>
-          <p style="margin:0 0 8px;color:#475569;font-size:14px;">${[source, publishedAt].filter(Boolean).join(" · ")}</p>
-          <p style="margin:0 0 12px;color:#334155;font-size:16px;line-height:1.6;">${summary}</p>
-          ${
-            articleUrl
-              ? `<p style="margin:0;"><a href="${escapeHtml(articleUrl)}" style="color:#2563eb;text-decoration:none;">Leer mas</a></p>`
-              : ""
-          }
-        </article>
-      `;
-    })
-    .join("");
-
-  const textItems = articles
-    .map((article, index) => {
-      const articleUrl = buildArticleUrl(article.sourceUrl, article.slug);
-      const summary = article.resumen?.trim() || article.contenido.trim();
-      const source = article.sourceName ? `Fuente: ${article.sourceName}` : null;
-      const publishedAt = formatDate(article.publishedAt);
-
-      return [
-        `${index + 1}. ${article.titulo}`,
-        source,
-        publishedAt ? `Publicado: ${publishedAt}` : null,
-        summary,
-        articleUrl ? `Link: ${articleUrl}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
-    })
-    .join("\n\n");
-
-  const html = `
-    <div style="margin:0 auto;max-width:680px;padding:32px 24px;font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a;">
-      <header style="margin-bottom:32px;">
-        <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#7c3aed;">${escapeHtml(newsletterName)}</p>
-        <h1 style="margin:0 0 12px;font-size:32px;line-height:1.2;">Noticias recientes</h1>
-        <p style="margin:0;color:#475569;font-size:16px;line-height:1.6;">${escapeHtml(intro)}</p>
-      </header>
-      ${htmlItems}
-      <footer style="margin-top:32px;font-size:12px;line-height:1.6;color:#64748b;">
-        Recibiste este correo porque tu suscripcion al newsletter esta activa.
-      </footer>
-    </div>
-  `.trim();
-
-  const text = `
-${newsletterName}
-
-Noticias recientes
-
-${intro}
-
-${textItems}
-
-Recibiste este correo porque tu suscripcion al newsletter esta activa.
-  `.trim();
-
-  return { html, text };
-}
-
 async function sendEmailWithZavu({
   to,
   subject,
@@ -192,14 +69,31 @@ async function sendEmailWithZavu({
       "Content-Type": "application/json",
       ...(senderId ? { "Zavu-Sender": senderId } : {}),
     },
-    body: JSON.stringify({
-      to,
-      channel: "email",
-      subject,
-      text,
-      htmlBody,
-      ...(replyTo ? { replyTo } : {}),
-    }),
+    body: JSON.stringify(
+      createZavuEmailPayload({
+        to,
+        content: {
+          newsletterName: "",
+          editionLabel: "",
+          preheader: "",
+          headline: "",
+          intro: "",
+          featuredArticle: null,
+          articles: [],
+          highlights: [],
+          ctaLabel: "",
+          ctaHref: null,
+          footerNote: "",
+          companyName: "",
+          companyAddress: "",
+          unsubscribeHref: null,
+        },
+        replyTo,
+      }),
+    ).replace(
+      /"subject":"[^"]*","text":"[^"]*","htmlBody":"[^"]*"/,
+      JSON.stringify({ subject, text, htmlBody }).slice(1, -1),
+    ),
     cache: "no-store",
   });
 
@@ -268,18 +162,22 @@ async function createDispatchForNewsletter(newsletterId: string) {
     return null;
   }
 
-  const subject = buildEmailSubject(newsletter.nombre, noticias.length);
-  const { html, text } = buildEmailContent({
+  const content = buildNewsletterTemplateContent({
     newsletterName: newsletter.nombre,
     newsletterDescription: newsletter.descripcion,
     articles: noticias,
+    baseUrl: process.env.APP_URL,
+    unsubscribeHref: process.env.APP_URL?.trim()
+      ? `${process.env.APP_URL.trim().replaceAll(/\/+$/g, "")}/unsubscribe`
+      : null,
   });
+  const { subject, htmlBody, text } = buildNewsletterEmail(content);
 
   const envio = await prisma.newsletterEnvio.create({
     data: {
       newsletterId: newsletter.id,
       asunto: subject,
-      contenidoHtml: html,
+      contenidoHtml: htmlBody,
       contenidoTexto: text,
       noticiaIds: noticias.map((item) => item.id),
       recipientCount: newsletter.subscripciones.length,
