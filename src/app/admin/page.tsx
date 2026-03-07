@@ -7,6 +7,7 @@ import {
   createNewsletter,
   createNoticia,
   createSubscription,
+  deleteUser,
   deleteNewsletter,
   deleteNoticia,
   deleteSubscription,
@@ -339,13 +340,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <th className="px-4 py-2 font-medium">Newsletters</th>
                   <th className="px-4 py-2 font-medium">Noticias</th>
                   <th className="px-4 py-2 font-medium">Alta</th>
+                  <th className="px-4 py-2 font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {users.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="rounded-3xl border border-dashed border-slate-200 px-6 py-12 text-center"
                     >
                       <p className="text-lg font-semibold text-slate-950">
@@ -418,11 +420,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <td className="px-4 py-5 align-top font-semibold text-slate-950">
                           {user._count.noticias}
                         </td>
-                        <td className="rounded-r-3xl px-4 py-5 align-top text-slate-500">
+                        <td className="px-4 py-5 align-top text-slate-500">
                           <div className="space-y-1">
                             <p>{formatDate(user.createdAt)}</p>
                             <p>Actualizado: {formatDate(user.updatedAt)}</p>
                           </div>
+                        </td>
+                        <td className="rounded-r-3xl px-4 py-5 align-top">
+                          <form action={deleteUser}>
+                            <input type="hidden" name="id" value={user.id} />
+                            <button type="submit" className={dangerButtonClass}>
+                              Eliminar usuario
+                            </button>
+                          </form>
                         </td>
                       </tr>
                     );

@@ -350,3 +350,35 @@ export async function deleteSubscription(formData: FormData) {
     "No pudimos eliminar la suscripcion.",
   );
 }
+
+export async function deleteUser(formData: FormData) {
+  await handleAdminAction(
+    async () => {
+      const id = getRequiredString(formData, "id", "id");
+
+      const existingUser = await prisma.usuario.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+
+      if (!existingUser) {
+        throw new Error("El usuario que quieres eliminar ya no existe.");
+      }
+
+      await prisma.$transaction([
+        prisma.noticia.updateMany({
+          where: { autorId: id },
+          data: { autorId: null },
+        }),
+        prisma.subscripcion.deleteMany({
+          where: { usuarioId: id },
+        }),
+        prisma.usuario.delete({
+          where: { id },
+        }),
+      ]);
+    },
+    "Usuario eliminado correctamente.",
+    "No pudimos eliminar el usuario.",
+  );
+}
