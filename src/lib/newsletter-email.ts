@@ -47,7 +47,7 @@ function escapeHtml(value: string) {
 }
 
 function getBaseUrl() {
-  return process.env.APP_URL?.trim().replace(/\/+$/g, "") ?? "";
+  return process.env.APP_URL?.trim().replaceAll(/\/+$/g, "") ?? "";
 }
 
 function formatDate(date: Date | null) {
