@@ -8,7 +8,6 @@ import { prisma } from "@/lib/prisma";
 import {
   buildNewsletterEmail,
   buildNewsletterTemplateContent,
-  createZavuEmailPayload,
 } from "@/lib/newsletter-template";
 
 const DEFAULT_SEND_BATCH_SIZE = 50;
@@ -69,31 +68,14 @@ async function sendEmailWithZavu({
       "Content-Type": "application/json",
       ...(senderId ? { "Zavu-Sender": senderId } : {}),
     },
-    body: JSON.stringify(
-      createZavuEmailPayload({
-        to,
-        content: {
-          newsletterName: "",
-          editionLabel: "",
-          preheader: "",
-          headline: "",
-          intro: "",
-          featuredArticle: null,
-          articles: [],
-          highlights: [],
-          ctaLabel: "",
-          ctaHref: null,
-          footerNote: "",
-          companyName: "",
-          companyAddress: "",
-          unsubscribeHref: null,
-        },
-        replyTo,
-      }),
-    ).replace(
-      /"subject":"[^"]*","text":"[^"]*","htmlBody":"[^"]*"/,
-      JSON.stringify({ subject, text, htmlBody }).slice(1, -1),
-    ),
+    body: JSON.stringify({
+      to,
+      channel: "email",
+      subject,
+      text,
+      htmlBody,
+      ...(replyTo ? { replyTo } : {}),
+    }),
     cache: "no-store",
   });
 

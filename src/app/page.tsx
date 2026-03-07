@@ -1,4 +1,6 @@
 import { NewsletterForm } from "@/components/newsletter-form";
+import { NewsletterPreview } from "@/components/newsletter-preview";
+import { landingNewsletterPreviewContent } from "@/lib/newsletter-template";
 
 const benefits = [
   "Ideas accionables para lanzar y crecer productos digitales.",
@@ -115,6 +117,47 @@ export default function Home() {
               pequenos que quieren ejecutar mas rapido.
             </p>
           </article>
+        </section>
+
+        <section className="grid gap-8 rounded-4xl border border-slate-200 bg-white/85 p-8 shadow-sm lg:grid-cols-[0.8fr_1.2fr] lg:p-10">
+          <div className="space-y-5">
+            <div className="inline-flex w-fit items-center rounded-full border border-cyan-200 bg-cyan-50 px-4 py-2 text-sm font-medium text-cyan-700">
+              Asi se vera el newsletter
+            </div>
+
+            <div className="space-y-4">
+              <h2 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+                Un preview real del correo que enviaremos a tus suscriptores.
+              </h2>
+              <p className="text-base leading-8 text-slate-600 sm:text-lg">
+                Este ejemplo no es una maqueta aislada. Usa la misma estructura
+                de contenido que el sistema reutiliza para generar el correo en
+                HTML y texto plano antes de enviarlo por Zavu.
+              </p>
+            </div>
+
+            <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <p className="text-sm font-semibold text-slate-950">
+                La plantilla ya queda preparada para:
+              </p>
+              <ul className="space-y-3 text-sm leading-7 text-slate-600">
+                <li className="flex gap-3">
+                  <span className="mt-2 h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <span>Mostrar una historia destacada con CTA principal.</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="mt-2 h-2.5 w-2.5 rounded-full bg-sky-500" />
+                  <span>Listar noticias secundarias en un bloque reusable.</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="mt-2 h-2.5 w-2.5 rounded-full bg-violet-500" />
+                  <span>Construir `subject`, `text` y `htmlBody` para Zavu.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <NewsletterPreview content={landingNewsletterPreviewContent} />
         </section>
       </div>
     </main>

@@ -22,7 +22,7 @@ function ArticleMeta({
 
 export function NewsletterPreview({ content }: NewsletterPreviewProps) {
   return (
-    <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.12)]">
+    <div className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.12)]">
       <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
         <div className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full bg-rose-400" />

@@ -3,10 +3,8 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  initialNewsletterState,
-  subscribeToNewsletter,
-} from "@/app/actions";
+import { subscribeToNewsletter } from "@/app/actions";
+import { initialNewsletterState } from "@/lib/newsletter-form-state";
 
 function SubmitButton() {
   const { pending } = useFormStatus();

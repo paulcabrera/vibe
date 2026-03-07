@@ -1,16 +1,7 @@
 "use server";
 
+import { NewsletterState } from "@/lib/newsletter-form-state";
 import { saveSignup } from "@/lib/newsletter-store";
-
-export type NewsletterState = {
-  status: "idle" | "success" | "error";
-  message: string;
-};
-
-export const initialNewsletterState: NewsletterState = {
-  status: "idle",
-  message: "",
-};
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
