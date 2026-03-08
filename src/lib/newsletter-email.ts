@@ -13,6 +13,7 @@ import {
 const DEFAULT_SEND_BATCH_SIZE = 50;
 const DEFAULT_NEWS_ITEMS_PER_EMAIL = 5;
 const ZAVU_MESSAGES_URL = "https://api.zavu.dev/v1/messages";
+const RESEND_EMAILS_URL = "https://api.resend.com/emails";
 
 type ZavuSendResponse = {
   message?: {
@@ -23,6 +24,25 @@ type ZavuSendResponse = {
     code?: string;
     message?: string;
   };
+};
+
+type ResendSendResponse = {
+  id?: string;
+  message?: string;
+  error?: string;
+};
+
+type EmailSendParams = {
+  to: string;
+  subject: string;
+  text: string;
+  htmlBody: string;
+};
+
+type EmailProviderResult = {
+  messageId: string | null;
+  status: string;
+  provider: string;
 };
 
 export type ProcessNewsletterEmailsResult = {
@@ -41,17 +61,28 @@ function getEnvNumber(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseJsonResponse<T>(rawResponse: string): T {
+  if (!rawResponse) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(rawResponse) as T;
+  } catch {
+    return {} as T;
+  }
+}
+
+function getReplyToEmail() {
+  return process.env.ZAVU_REPLY_TO_EMAIL?.trim() || process.env.RESEND_REPLY_TO_EMAIL?.trim();
+}
+
 async function sendEmailWithZavu({
   to,
   subject,
   text,
   htmlBody,
-}: {
-  to: string;
-  subject: string;
-  text: string;
-  htmlBody: string;
-}) {
+}: EmailSendParams): Promise<EmailProviderResult> {
   const apiKey = process.env.ZAVU_API_KEY?.trim();
 
   if (!apiKey) {
@@ -59,7 +90,7 @@ async function sendEmailWithZavu({
   }
 
   const senderId = process.env.ZAVU_SENDER_ID?.trim();
-  const replyTo = process.env.ZAVU_REPLY_TO_EMAIL?.trim();
+  const replyTo = getReplyToEmail();
 
   const response = await fetch(ZAVU_MESSAGES_URL, {
     method: "POST",
@@ -80,7 +111,7 @@ async function sendEmailWithZavu({
   });
 
   const rawResponse = await response.text();
-  const payload = rawResponse ? (JSON.parse(rawResponse) as ZavuSendResponse) : {};
+  const payload = parseJsonResponse<ZavuSendResponse>(rawResponse);
 
   if (!response.ok) {
     throw new Error(
@@ -94,6 +125,101 @@ async function sendEmailWithZavu({
     status: payload.message?.status ?? "queued",
     provider: "zavu-email",
   };
+}
+
+async function sendEmailWithResend({
+  to,
+  subject,
+  text,
+  htmlBody,
+}: EmailSendParams): Promise<EmailProviderResult> {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY is not configured.");
+  }
+
+  const from = process.env.RESEND_FROM_EMAIL?.trim();
+
+  if (!from) {
+    throw new Error("RESEND_FROM_EMAIL is not configured.");
+  }
+
+  const replyTo = getReplyToEmail();
+  const response = await fetch(RESEND_EMAILS_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject,
+      text,
+      html: htmlBody,
+      ...(replyTo ? { reply_to: replyTo } : {}),
+    }),
+    cache: "no-store",
+  });
+
+  const rawResponse = await response.text();
+  const payload = parseJsonResponse<ResendSendResponse>(rawResponse);
+
+  if (!response.ok) {
+    throw new Error(
+      payload.message ||
+        payload.error ||
+        `Resend email request failed with status ${response.status}.`,
+    );
+  }
+
+  return {
+    messageId: payload.id ?? null,
+    status: "queued",
+    provider: "resend-email",
+  };
+}
+
+async function sendNewsletterEmail(params: EmailSendParams): Promise<EmailProviderResult> {
+  const providerAttempts = [
+    {
+      name: "zavu-email",
+      enabled: Boolean(process.env.ZAVU_API_KEY?.trim()),
+      send: () => sendEmailWithZavu(params),
+    },
+    {
+      name: "resend-email",
+      enabled: Boolean(
+        process.env.RESEND_API_KEY?.trim() && process.env.RESEND_FROM_EMAIL?.trim(),
+      ),
+      send: () => sendEmailWithResend(params),
+    },
+  ];
+
+  const errors: string[] = [];
+
+  for (const attempt of providerAttempts) {
+    if (!attempt.enabled) {
+      continue;
+    }
+
+    try {
+      return await attempt.send();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unexpected email delivery error.";
+      errors.push(`${attempt.name}: ${message}`);
+    }
+  }
+
+  if (errors.length === 0) {
+    throw new Error(
+      "No email provider is configured. Set ZAVU_* or RESEND_* environment variables.",
+    );
+  }
+
+  throw new Error(`All email providers failed. ${errors.join(" | ")}`);
 }
 
 async function createDispatchForNewsletter(newsletterId: string) {
@@ -359,7 +485,7 @@ async function processDispatch(envioId: string, batchSize: number) {
 
   for (const entrega of envio.entregas) {
     try {
-      const result = await sendEmailWithZavu({
+      const result = await sendNewsletterEmail({
         to: entrega.email,
         subject: envio.asunto,
         text: envio.contenidoTexto,
@@ -388,7 +514,7 @@ async function processDispatch(envioId: string, batchSize: number) {
         data: {
           estado: EstadoEntregaNewsletter.FAILED,
           errorMessage: message,
-          provider: "zavu-email",
+          provider: null,
         },
       });
 
